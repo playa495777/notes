@@ -346,6 +346,8 @@ button{cursor:pointer}
 .seg button:hover{color:var(--ink)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .seg-row{margin-top:10px}
+.seg button:disabled{opacity:.4;cursor:default}
+.seg .yr{min-width:64px;color:var(--ink);font-variant-numeric:tabular-nums}
 #tab-progress .c.off{background:transparent}
 #tab-finance .bc.fut .bc-m{opacity:.5}
 #tab-finance .d-f.w{flex:1 1 100%}
@@ -560,11 +562,25 @@ window.__safe=(function(){
     ul.innerHTML=h||'<li><span>Автокопии появятся после первого дня с твоими данными.</span></li>';
     $('snaps-s').textContent='Автокопии на этом устройстве'+(n?' ('+n+')':'');
   }
+  function years(){
+    var y=new Date().getFullYear(),m=y;
+    Object.keys(regs).forEach(function(k){try{var v=regs[k].minYear?regs[k].minYear():y;if(v&&v<m)m=v;}catch(e){}});
+    var a=[];
+    for(var i=y;i>=m;i--)a.push(i);
+    return a;
+  }
+  function fillYears(){
+    var s=$('md-year-s');
+    if(!s)return;
+    var ys=years(),cur=s.value,h=ys.map(function(y){return '<option>'+y+'</option>';}).join('');
+    if(s.dataset.h!==h){s.innerHTML=h;s.dataset.h=h;if(cur&&ys.indexOf(+cur)>-1)s.value=cur;}
+  }
   function mdReview(kind){
-    var now=new Date(),to=new Date(now.getFullYear(),now.getMonth(),now.getDate()),from;
-    if(kind==='week')from=new Date(to.getFullYear(),to.getMonth(),to.getDate()-((to.getDay()+6)%7));
-    else from=new Date(to.getFullYear(),to.getMonth(),1);
-    var out='---\ntags: [трекер, '+(kind==='week'?'обзор-недели':'обзор-месяца')+']\ndate: '+dkey(to)+'\n---\n# '+(kind==='week'?'Обзор недели ':'Обзор месяца ')+fmtD(from)+' — '+fmtD(to)+'\n';
+    var now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),to=today,from,title,tag;
+    if(kind==='week'){from=new Date(to.getFullYear(),to.getMonth(),to.getDate()-((to.getDay()+6)%7));title='Обзор недели '+fmtD(from)+' — '+fmtD(to);tag='обзор-недели';}
+    else if(kind==='year'){var y=+$('md-year-s').value||today.getFullYear();from=new Date(y,0,1);to=new Date(y,11,31);if(to>today)to=today;title='Итоги '+y+' года';tag='итоги-года';}
+    else{from=new Date(to.getFullYear(),to.getMonth(),1);title='Обзор месяца '+fmtD(from)+' — '+fmtD(to);tag='обзор-месяца';}
+    var out='---\ntags: [трекер, '+tag+']\ndate: '+dkey(to)+'\n---\n# '+title+'\n';
     ['progress','finance'].forEach(function(k){if(regs[k]&&regs[k].md)out+='\n'+regs[k].md(from,to);});
     out+='\n## Вывод\n- Что получилось:\n- Что не получилось:\n- Что меняю:\n';
     saveFile('review-'+kind+'-'+dkey(to)+'.md',out,'text/markdown').then(function(){toast('Обзор сохранён');}).catch(function(e){if(!e||e.code!=='declined')toast('Не удалось сохранить файл');});
@@ -583,6 +599,7 @@ window.__safe=(function(){
     $('toast-u').addEventListener('click',function(){var f=undoFn;undoFn=null;$('toast').hidden=true;if(f)f();});
     $('md-week').addEventListener('click',function(){mdReview('week');});
     $('md-month').addEventListener('click',function(){mdReview('month');});
+    $('md-year').addEventListener('click',function(){mdReview('year');});
     $('snap-list').addEventListener('click',function(e){
       var b=e.target.closest('[data-snap]');
       if(!b)return;
@@ -591,8 +608,8 @@ window.__safe=(function(){
       var n=r.norm(x.s);
       if(n){var m={};m[p[0]]=n;applyAll(m,'Восстановлено состояние на '+fmtD(new Date(x.d+'T00:00:00')));}
     });
-    window.__link.on(refreshAge);
-    refreshAge();renderSnaps();
+    window.__link.on(function(){refreshAge();fillYears();});
+    refreshAge();renderSnaps();fillYears();
     setTimeout(takeSnaps,4000);
     try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
   }
@@ -680,6 +697,7 @@ window.__safe=(function(){
     <div class="col">
       <section>
         <h2 class="sec">Активность <span id="heat-meta"></span><span class="seg" id="heat-range" role="group" aria-label="Период"><button type="button" data-range="20">20 нед</button><button type="button" data-range="y">Год</button></span></h2>
+        <div class="seg-row" id="heat-nav" hidden><span class="seg" role="group" aria-label="Год"><button type="button" data-ynav="-1" aria-label="Предыдущий год">‹</button><button type="button" class="yr" id="heat-y" disabled></button><button type="button" data-ynav="1" aria-label="Следующий год">›</button></span></div>
         <div class="heat">
           <div class="months" id="heat-months"></div>
           <div class="dows" aria-hidden="true"><span>Пн</span><span></span><span>Ср</span><span></span><span>Пт</span><span></span><span></span></div>
@@ -849,6 +867,7 @@ window.__safe=(function(){
           <div class="mi"><span class="k">Платежи покрыты инвестициями</span><span class="v" id="i-cov">—</span></div>
         </div>
         <div class="seg-row"><span class="seg" id="inc-range" role="group" aria-label="Период"><button type="button" data-range="6">6 мес</button><button type="button" data-range="12">12 мес</button><button type="button" data-range="y">Год</button></span></div>
+        <div class="seg-row" id="inc-nav" hidden><span class="seg" role="group" aria-label="Год"><button type="button" data-ynav="-1" aria-label="Предыдущий год">‹</button><button type="button" class="yr" id="inc-y" disabled></button><button type="button" data-ynav="1" aria-label="Следующий год">›</button></span></div>
         <div class="bars" id="bars" role="img" aria-label="Доход по месяцам"></div>
         <ul id="income"></ul>
         <form class="add" id="income-form" autocomplete="off">
@@ -910,6 +929,7 @@ window.__safe=(function(){
       <label class="ghost" for="bk-all-file">Загрузить копию</label><input type="file" id="bk-all-file" accept="application/json,.json" hidden>
       <button type="button" class="ghost" id="md-week">Обзор недели .md</button>
       <button type="button" class="ghost" id="md-month">Обзор месяца .md</button>
+      <select id="md-year-s" class="ghost" aria-label="Год для итогов"></select><button type="button" class="ghost" id="md-year">Итоги года .md</button>
     </div>
     <p>Копия включает прогресс и финансы. Загрузка заменяет текущие данные, её можно отменить сразу после. Файл .md открывается в Obsidian.</p>
     <details id="snaps"><summary id="snaps-s">Автокопии на этом устройстве</summary><ul id="snap-list"></ul></details>
@@ -1009,6 +1029,7 @@ function seed(){
 
 var state=norm(lsRead())||seed();
 var heatRange=(function(){try{var v=localStorage.getItem(LS+'-range');return v==='y'?'y':'20';}catch(e){return '20';}})();
+var heatYear=null;
 var ref=null,rev=0,savedRev=0,saving=false,timer=null,loadTimer=null;
 var armed=null,armTimer=null;
 
@@ -1167,10 +1188,16 @@ function renderHabits(now,tk){
   $('h-count').textContent=n+' из '+tot;
 }
 
+function minYear(){
+  var y=startOfDay(new Date()).getFullYear();
+  Object.keys(state.log).forEach(function(k){var v=+k.slice(0,4);if(v&&v<y)y=v;});
+  state.habits.forEach(function(h){var v=+(h.created||'').slice(0,4);if(v&&v<y)y=v;});
+  return y;
+}
 function renderHeat(now,tk){
-  var dow=(now.getDay()+6)%7,W,start;
+  var dow=(now.getDay()+6)%7,W,start,Y=(heatRange==='y'&&heatYear!==null)?heatYear:now.getFullYear();
   if(heatRange==='y'){
-    var jan=new Date(now.getFullYear(),0,1),endY=new Date(now.getFullYear(),11,31);
+    var jan=new Date(Y,0,1),endY=new Date(Y,11,31);
     start=addDays(jan,-((jan.getDay()+6)%7));
     W=Math.ceil((Math.round((endY-start)/864e5)+1)/7);
   }else{W=20;start=addDays(now,-dow-(W-1)*7);}
@@ -1179,11 +1206,11 @@ function renderHeat(now,tk){
   var cells='',months='',prev=-1,activeDays=0;
   for(var c=0;c<W;c++){
     var ws=addDays(start,c*7),wr=(heatRange==='y'?addDays(ws,6):ws),m=wr.getMonth();
-    months+='<span>'+((m!==prev&&wr.getFullYear()<=now.getFullYear())?wr.toLocaleDateString('ru-RU',{month:'short'}).replace('.','').slice(0,heatRange==='y'?3:9):'')+'</span>';
+    months+='<span>'+((m!==prev&&wr.getFullYear()<=Y)?wr.toLocaleDateString('ru-RU',{month:'short'}).replace('.','').slice(0,heatRange==='y'?3:9):'')+'</span>';
     prev=m;
     for(var r=0;r<7;r++){
       var d=addDays(start,c*7+r),k=key(d);
-      if(heatRange==='y'&&d.getFullYear()<now.getFullYear()){cells+='<div class="c off"></div>';continue;}
+      if(heatRange==='y'&&d.getFullYear()!==Y){cells+='<div class="c off"></div>';continue;}
       if(k>tk){cells+='<div class="c fut"></div>';continue;}
       var act=state.habits.filter(function(h){return activeOn(h,k);});
       var dn=act.filter(function(h){return doneOn(h.id,k);}).length;
@@ -1197,8 +1224,11 @@ function renderHeat(now,tk){
   $('heat-cells').innerHTML=cells;
   $('heat-meta').textContent='';
   $('s-days').textContent=activeDays;
-  $('s-days-l').textContent=heatRange==='y'?'активных дней в этом году':'активных дней за 20 недель';
+  $('s-days-l').textContent=heatRange==='y'?(Y===now.getFullYear()?'активных дней в этом году':'активных дней в '+Y+' году'):'активных дней за 20 недель';
   Array.prototype.forEach.call($('heat-range').querySelectorAll('button'),function(b){b.setAttribute('aria-pressed',b.dataset.range===heatRange?'true':'false');});
+  var hn=$('heat-nav');
+  hn.hidden=heatRange!=='y';
+  if(heatRange==='y'){$('heat-y').textContent=String(Y);hn.querySelector('[data-ynav="-1"]').disabled=Y<=minYear();hn.querySelector('[data-ynav="1"]').disabled=Y>=now.getFullYear();}
 }
 
 function goalPace(g){
@@ -1768,11 +1798,20 @@ $('heat-range').addEventListener('click',function(e){
   try{localStorage.setItem(LS+'-range',heatRange);}catch(er){}
   render();
 });
+$('heat-nav').addEventListener('click',function(e){
+  var b=e.target.closest('[data-ynav]');
+  if(!b||b.disabled)return;
+  var cur=startOfDay(new Date()).getFullYear(),y=(heatYear===null?cur:heatYear)+(+b.dataset.ynav);
+  if(y>cur)y=cur;
+  if(y<minYear())y=minYear();
+  heatYear=(y===cur?null:y);
+  render();
+});
 window.__link.progToday=todayData;
 window.__safe.reg('progress',{ls:LS,get:function(){return state;},norm:norm,
   set:function(o){var n=norm(o);if(n){state=n;commit();}},
   nonEmpty:function(s){return !!(s.habits.length||s.goals.length||s.focus.length||s.skills.length||s.buffs.length||s.course.line||s.course.goals.length||s.decisions.length);},
-  md:mdProgress});
+  md:mdProgress,minYear:minYear});
 window.__link.on(function(src){if(src==='fin')render();});
 
 render();
@@ -1887,6 +1926,7 @@ function seed(){
 
 var state=norm(lsRead())||seed();
 var incRange=(function(){try{var v=localStorage.getItem(LS+'-range');return (v==='6'||v==='12'||v==='y')?v:'6';}catch(e){return '6';}})();
+var incYear=null,incAll=false;
 var ref=null,rev=0,savedRev=0,saving=false,timer=null,loadTimer=null,armed=null,armTimer=null;
 
 function status(t){var e=$('status-f');if(e)e.textContent=t;}
@@ -2123,6 +2163,12 @@ function renderDebts(now){
   }).join('');
 }
 
+function minYearF(){
+  var y=startOfDay(new Date()).getFullYear();
+  state.income.forEach(function(x){var v=+x.date.slice(0,4);if(v&&v<y)y=v;});
+  state.history.forEach(function(h){var v=+h.d.slice(0,4);if(v&&v<y)y=v;});
+  return y;
+}
 function renderIncome(now){
   var by=incomeByMonth(),cur=now.getFullYear()+'-'+pad(now.getMonth()+1),c=by[cur]||{salary:0,invest:0};
   var mon=now.toLocaleDateString('ru-RU',{month:'long'});
@@ -2131,10 +2177,10 @@ function renderIncome(now){
   $('i-inv').textContent=money(c.invest);
   var ai=avgInvest(now),pay2=sum(state.debts,function(d){return d.balance>0?d.pay:0;});
   $('i-cov').textContent=(ai!==null&&pay2>0)?Math.round(ai/pay2*100)+'%':'—';
-  var cols=[],max=0,i,N,curY=now.getFullYear(),curM=now.getMonth();
+  var cols=[],max=0,i,N,curY=now.getFullYear(),curM=now.getMonth(),Yr=(incRange==='y'&&incYear!==null)?incYear:curY;
   if(incRange==='y'){
     N=12;
-    for(i=0;i<12;i++)cols.push({d:new Date(curY,i,1),fut:i>curM,now:i===curM});
+    for(i=0;i<12;i++)cols.push({d:new Date(Yr,i,1),fut:Yr===curY&&i>curM,now:Yr===curY&&i===curM});
   }else{
     N=incRange==='12'?12:6;
     for(i=N-1;i>=0;i--)cols.push({d:new Date(curY,curM-i,1),fut:false,now:i===0});
@@ -2161,16 +2207,19 @@ function renderIncome(now){
       '<span class="bc-m">'+mn+'</span></div>';
   }).join('');
   Array.prototype.forEach.call($('inc-range').querySelectorAll('button'),function(b){b.setAttribute('aria-pressed',b.dataset.range===incRange?'true':'false');});
+  var inn=$('inc-nav');
+  inn.hidden=incRange!=='y';
+  if(incRange==='y'){$('inc-y').textContent=String(Yr);inn.querySelector('[data-ynav="-1"]').disabled=Yr<=minYearF();inn.querySelector('[data-ynav="1"]').disabled=Yr>=curY;}
   var list=state.income.slice().sort(function(a,b){return a.date<b.date?1:(a.date>b.date?-1:(a.id<b.id?1:-1));});
   var ul=$('income');
   $('i-meta').textContent=list.length?list.length+' '+plural(list.length,['запись','записи','записей']):'';
   if(!list.length){ul.innerHTML='<li class="empty">Поступлений пока нет. Добавь зарплату или выплату от инвестиций ниже.</li>';return;}
-  ul.innerHTML=list.slice(0,8).map(function(x){
+  ul.innerHTML=list.slice(0,incAll?list.length:8).map(function(x){
     var aid='i:'+x.id,isA=armed===aid;
     return '<li class="inc"><div class="inc-main"><span class="inc-k"><i class="sw '+(x.kind==='salary'?'s':'i')+'"></i><span class="inc-note">'+esc(x.note||(x.kind==='salary'?'Зарплата':'Инвестиции'))+'</span></span><span class="inc-date">'+fullDate(x.date)+'</span></div>'+
       '<span class="inc-sum">'+money(x.amount)+'</span>'+
       '<button type="button" class="x" data-act="inc-del" data-id="'+esc(x.id)+'"'+(isA?' data-armed="1"':'')+'>'+(isA?'Точно?':'Удалить')+'</button></li>';
-  }).join('')+(list.length>8?'<li class="empty">И ещё '+(list.length-8)+' более ранних записей. Они учитываются в расчётах.</li>':'');
+  }).join('')+(list.length>8?'<li class="empty">'+(incAll?'Показаны все '+list.length+' записей. ':'И ещё '+(list.length-8)+' более ранних записей, они учитываются в расчётах. ')+'<button type="button" class="x pos" data-act="inc-all">'+(incAll?'Свернуть':'Показать все')+'</button></li>':'');
 }
 
 function renderChart(){
@@ -2325,6 +2374,8 @@ document.addEventListener('click',function(e){
     arm('d:'+id,function(){state.debts=state.debts.filter(function(x){return x.id!==id;});commit();});
   }else if(a==='inc-del'){
     arm('i:'+id,function(){state.income=state.income.filter(function(x){return x.id!==id;});commit();});
+  }else if(a==='inc-all'){
+    incAll=!incAll;render();
   }else if(a==='pf-del'){
     arm('p:'+id,function(){state.pf=state.pf.filter(function(x){return x.id!==id;});commit();});
   }else if(a==='clear-sample-f'){
@@ -2442,6 +2493,15 @@ $('pfd-form').addEventListener('submit',function(e){
 });
 $('pfd-date').value=key(startOfDay(new Date()));
 
+$('inc-nav').addEventListener('click',function(e){
+  var b=e.target.closest('[data-ynav]');
+  if(!b||b.disabled)return;
+  var cur=startOfDay(new Date()).getFullYear(),y=(incYear===null?cur:incYear)+(+b.dataset.ynav);
+  if(y>cur)y=cur;
+  if(y<minYearF())y=minYearF();
+  incYear=(y===cur?null:y);
+  render();
+});
 $('inc-range').addEventListener('click',function(e){
   var b=e.target.closest('button');
   if(!b)return;
@@ -2472,7 +2532,7 @@ window.__link.finToday=finToday;
 window.__safe.reg('finance',{ls:LS,get:function(){return state;},norm:norm,
   set:function(o){var n=norm(o);if(n){state=n;commit();}},
   nonEmpty:function(s){return !!(s.assets.length||s.debts.length||s.income.length||s.pf.length);},
-  md:mdFinance});
+  md:mdFinance,minYear:minYearF});
 render();
 
 var rt=null;
